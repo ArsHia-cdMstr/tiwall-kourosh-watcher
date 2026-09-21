@@ -1,0 +1,6 @@
+.chrome-profile/
+.venv/
+__pycache__/
+*.pyc
+config.json
+watcher.log

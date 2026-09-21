@@ -1,0 +1,72 @@
+name: Watch Tiwall showtimes
+
+on:
+  schedule:
+    # GitHub schedules use UTC. Runs every 30 minutes.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      send_test_notification:
+        description: "Send a test notification instead of checking Tiwall"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tiwall-showtime-watcher
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      NTFY_SERVER: https://ntfy.sh
+      PURCHASE_URL: https://www.tiwall.com/s/kourosh2
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate secret
+        shell: bash
+        run: |
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "The NTFY_TOPIC repository secret is missing."
+            exit 1
+          fi
+
+      - name: Run watcher
+        if: ${{ !inputs.send_test_notification }}
+        run: python watcher.py
+
+      - name: Send test notification
+        if: ${{ inputs.send_test_notification }}
+        run: python watcher.py --test-notification
+
+      - name: Save newly seen showtimes
+        if: ${{ !inputs.send_test_notification }}
+        shell: bash
+        run: |
+          if git diff --quiet -- state.json; then
+            echo "No state change to save."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.json
+          git commit -m "Update seen Tiwall showtimes"
+          git push
