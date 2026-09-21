@@ -2,8 +2,8 @@ name: Watch Tiwall showtimes
 
 on:
   schedule:
-    # GitHub schedules use UTC. Runs every 30 minutes.
-    - cron: "*/30 * * * *"
+    # GitHub schedules use UTC. Avoid the busy start of each hour.
+    - cron: "7,37 * * * *"
   workflow_dispatch:
     inputs:
       send_test_notification:
