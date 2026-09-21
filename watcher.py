@@ -72,6 +72,7 @@ def save_json(path: Path, value: dict) -> None:
 
 def fetch_showtimes(url: str) -> list[dict[str, str]]:
     from selenium import webdriver
+    from selenium.common.exceptions import TimeoutException
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support import expected_conditions as conditions
     from selenium.webdriver.support.ui import WebDriverWait
@@ -79,16 +80,25 @@ def fetch_showtimes(url: str) -> list[dict[str, str]]:
     options = webdriver.ChromeOptions()
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-sandbox")
     options.add_argument("--no-first-run")
     options.add_argument("--window-size=1280,1000")
     options.add_argument(f"--user-data-dir={BASE_DIR / '.chrome-profile'}")
+    # Tiwall may keep slow analytics/anti-bot requests open. We only need the DOM.
+    options.page_load_strategy = "none"
 
     driver = webdriver.Chrome(options=options)
     try:
-        driver.get(url)
-        WebDriverWait(driver, 40).until(
-            conditions.presence_of_element_located((By.CSS_SELECTOR, "[id^='instance']"))
+        driver.set_page_load_timeout(45)
+        try:
+            driver.get(url)
+        except TimeoutException:
+            log("Page load timed out; continuing with the DOM received so far.")
+        WebDriverWait(driver, 60).until(
+            conditions.presence_of_all_elements_located((By.CSS_SELECTOR, "[id^='instance']"))
         )
+        driver.execute_script("window.stop();")
         body = driver.page_source
     finally:
         driver.quit()
